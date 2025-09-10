@@ -1,0 +1,6 @@
+__pycache__/
+.Python
+build/
+.venv/
+.ropeproject/
+.venv
