@@ -1,19 +1,14 @@
-# interface.py (Corrigido com Mixin)
-
 import subprocess
 import threading
 from datetime import datetime
+import os
 
 
 class InterfaceMixin:
-    """
-    Mixin que contém todos os métodos relacionados à interação com a GUI.
-    """
-
     def _decode_output(self, data):
         if not data:
             return ""
-        for encoding in ["utf-8", "cp1252", "latin1"]:
+        for encoding in ["utf-8", "cp850", "latin1"]:
             try:
                 return data.decode(encoding).replace("\ufeff", "").strip()
             except UnicodeDecodeError:
@@ -24,20 +19,19 @@ class InterfaceMixin:
             .strip()
         )
 
-    def _execute_subprocess(self, full_command):
-        process = subprocess.run(
-            full_command, capture_output=True, text=False, check=False
+    def _execute_subprocess_realtime(self, full_command):
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        process = subprocess.Popen(
+            full_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            startupinfo=startupinfo,
         )
-        output = self._decode_output(process.stdout)
-        error = self._decode_output(process.stderr)
-        return output, error
-
-    def _schedule_gui_updates(self, output, error, task_name):
-        if output:
-            self.show_on_terminal(output)
-        if error:
-            self.show_on_terminal(f"ERRO:\n{error}")
-        self.show_on_terminal(f"--- CONCLUÍDO: {task_name} ---")
+        return process
 
     def show_menu(self, name_menu):
         frame = self.menu_frames[name_menu]
@@ -52,19 +46,37 @@ class InterfaceMixin:
         self.terminal_output.configure(state="disabled")
 
     def start_end(self):
-        data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        texto_inicial = f"=== Ferramentas - Windows ===\nData: {data_atual}\n"
-        texto_inicial += "============================\nSelecione uma opção no"
-        texto_inicial += " menu à esquerda"
-        self.show_on_terminal(texto_inicial)
+        date_now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        text_init = f"====== Ferramentas - Windows ======\nData: {date_now}\n"
+        text_init += "===========================\n"
+        text_init += "Selecione uma opção no menu à esquerda"
+        self.show_on_terminal(text_init)
 
-    def _mostrar_header(self, task_name, admin):
+    def _show_header(self, task_name, admin):
         admin_msg = " (Requer Admin)" if admin else ""
         self.show_on_terminal(f"\n--- INICIANDO: {task_name}{admin_msg} ---")
 
-    def _mostrar_erro(self, mensagem):
+    def _show_errors(self, mensagem):
         self.show_on_terminal(mensagem)
 
-    def _iniciar_thread(self, target):
+    def _run_thread(self, target):
         thread = threading.Thread(target=target, daemon=True)
         thread.start()
+
+    def _read_stream_and_update_gui(self, stream):
+        for line_bytes in iter(stream.readline, b""):
+            decoded_line = self._decode_output(line_bytes)
+            self.after(
+                0,
+                lambda line=decoded_line: self.show_on_terminal(line),
+            )
+
+    def _handle_process_completion(self, process, task_name):
+        process.wait()
+        error_output = self._decode_output(process.stderr.read())
+        if error_output:
+            self._show_errors(f"ERRO:\n{error_output}")
+        self.after(
+            0,
+            lambda: self.show_on_terminal(f"--- CONCLUÍDO: {task_name} ---"),
+        )
