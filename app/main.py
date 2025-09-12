@@ -22,13 +22,16 @@ class WorkbenchForWindows(ctk.CTk, InterfaceMixin, ScriptsMixin):
     def __init__(self):
         super().__init__()
         self.title("Ferramentas - Windows")
-        self.geometry("1000x700")
+        self.geometry("1200x700")
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self.menu_container_frame = MenuFrame(master=self)
         self.menu_frames = {}
         self.terminal_frame = TerminalFrame(master=self)
         self.terminal_output = TerminalOutput(master=self.terminal_frame)
+        self.terminal_output.tag_config("title", foreground="#FFD700")
+        self.terminal_output.tag_config("info", foreground="white")
+        self.terminal_output.tag_config("error", foreground="#FF4C4C")
         self._create_all_menus()
         self.start_end()
         self.show_menu("main")
