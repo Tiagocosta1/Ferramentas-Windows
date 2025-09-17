@@ -171,7 +171,7 @@ class ScriptsMixin:
 
     def config_date_time(self):
         command = (
-            'tzutil /s "E. South America Standard Time"; '
+            'tzutil /s "SA Western Standard Time"; '
             "net stop w32time; "
             "w32tm /unregister; "
             "w32tm /register; "
