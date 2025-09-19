@@ -102,7 +102,7 @@ class ScriptsMixin:
             command, "Ativando o Windows e Office", admin=True
         )
 
-    def run_compact(self):
+    def compact_os(self):
         command = (
             "powercfg /hibernate off;"
             "Set-ItemProperty -Path "
@@ -191,23 +191,32 @@ class ScriptsMixin:
         )
         self.run_powershell_in_thread(command, "Desativando IPv6", admin=True)
 
+    def command_clean_logs(self):
+        return (
+            'Write-Output "--- Iniciando Limpeza de Logs do Windows ---";\n'
+            '$logs = @("Application", "Security", "System", "Setup",'
+            ' "ForwardedEvents");\n'
+            'Write-Output "Limpando os principais logs de eventos...";\n'
+            "foreach ($log in $logs) {\n"
+            '    Write-Output "Processando log: $log";\n'
+            "    try {\n"
+            "        # Verifica se o log existe antes de tentar limpar\n"
+            "        if (Get-WinEvent -ListLog $log"
+            " -ErrorAction SilentlyContinue) {\n"
+            "            wevtutil cl $log;\n"  # Adicionado ; por segurança
+            '            Write-Output "Log $($log) limpo com sucesso."\n'
+            "        } else {\n"
+            '            Write-Output "Log $($log) não encontrado."\n'
+            "        }\n"
+            "    } catch {\n"
+            '        Write-Output "ERRO ao limpar o log $($log): $_"\n'
+            "    }\n"
+            "}\n"
+            'Write-Output "--- Limpeza de Logs do Windows Concluída ---";'
+        )
+
     def clean_logs(self):
-        command = """
-            try {
-                Write-Output "Limpando os logs de eventos do Windows..."
-                Get-WinEvent -ListLog * | ForEach-Object {
-                    try {
-                        Clear-EventLog -LogName $_.LogName
-                        Write-Output "Log limpo: $($_.LogName)"
-                    } catch {
-                        Write-Output "Não limpo o log: $($_.LogName) - $_"
-                    }
-                }
-                Write-Output "`nTodos os logs foram processados."
-            } catch {
-                Write-Error "Erro ao tentar limpar os logs: $_"
-            }
-        """
+        command = self.command_clean_logs()
         self.run_powershell_in_thread(
             command, "Limpando Logs do Windows", admin=True
         )
@@ -274,15 +283,6 @@ class ScriptsMixin:
             command, "Realizando Backup dos Drivers", admin=True
         )
 
-    def point_restore(self):
-        command = (
-            "Checkpoint-Computer -Description "
-            '"Ponto de Restauração MultiToolsShell"'
-        )
-        self.run_powershell_in_thread(
-            command, "Criação de Ponto de Restauração", admin=True
-        )
-
     def desativ_firewall(self):
         command = "netsh advfirewall set allprofiles state off"
         self.run_powershell_in_thread(
@@ -295,37 +295,73 @@ class ScriptsMixin:
             command, "Abrindo Gerenciador de usuários", admin=True
         )
 
-    def clean_temp_files(self):
-        command = """
+    def comand_temp_files(self):
+        return """
+            Write-Output "--- Iniciando Limpeza de Arquivos Temporários ---;"
             $paths = @("$env:TEMP", "$env:SystemRoot\\Prefetch", `
-                "$env:SystemRoot\\Temp")
+                "$env:SystemRoot\\Temp");
             foreach ($p in $paths) {
                 if (Test-Path $p) {
-                    Write-Output ("Limpando pasta: " + $p)
+                    Write-Output ("Limpando pasta: " + $p);
                     Remove-Item -Path "$p\\*" -Recurse -Force `
-                        -ErrorAction SilentlyContinue
+                        -ErrorAction SilentlyContinue;
                 }
             }
+            Write-Output "--- Limpeza de Arquivos Temporários Concluída ---;"
         """
+
+    def clean_temp_files(self):
+        command = self.comand_temp_files()
         self.run_powershell_in_thread(
             command, "Limpeza de Arquivos Temporários", admin=True
         )
 
-    def clean_browsers(self):
-        command = (
-            r'$chromeCache = "$env:LOCALAPPDATA\Google\Chrome\User Data'
-            r'\Default\Cache\*"; '
-            r'$edgeCache = "$env:LOCALAPPDATA\Microsoft\Edge\User Data'
-            r'\Default\Cache\*"; '
+    def command_browser_cache(self):
+        return (
+            'Write-Output "--- Limpeza de Cache - Navegadores ---";'
+            '$chromeCache = "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\'
+            'Default\\Cache\\*";'
+            '$edgeCache = "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\'
+            'Default\\Cache\\*";'
             "Remove-Item $chromeCache, $edgeCache -Recurse -Force "
-            "-ErrorAction SilentlyContinue"
+            "-ErrorAction SilentlyContinue;"
+            '$firefoxProfilesPath = "$env:APPDATA\\Mozilla\\Firefox\\'
+            'Profiles";'
+            "$profileDirs = Get-ChildItem -Path $firefoxProfilesPath"
+            " -Directory -ErrorAction SilentlyContinue;"
+            "foreach ($profile in $profileDirs) {"
+            '    $cachePath = Join-Path $profile.FullName "cache2";'
+            "    if (Test-Path $cachePath) {"
+            "        try {"
+            "            Remove-Item -Path $cachePath -Recurse -Force"
+            "             -ErrorAction Stop;"
+            '            Write-Output "Cache limpo: $($profile.Name)";'
+            "        }"
+            "        catch {"
+            '            Write-Output "Erro perfil $($profile.Name): $_;"'
+            "        }"
+            "    } else {"
+            '        Write-Output "Nenhum cache perfil: $($profile.Name);"'
+            "    }"
+            "}"
+            'Write-Output "--- Limpeza Cache - Navegadores Concluída ---;"'
         )
+
+    def clean_browsers(self):
+        command = self.command_browser_cache()
         self.run_powershell_in_thread(
             command, "Limpeza Cache do Navegadores", admin=True
         )
 
+    def command_clean_disk(self):
+        return (
+            'Write-Output "--- Iniciando Limpeza de Disco ---";'
+            'Start-Process cleanmgr -ArgumentList "/sagerun:1" -Wait;'
+            'Write-Output "--- Limpeza de Disco Concluída ---";'
+        )
+
     def clean_disk(self):
-        command = 'Start-Process cleanmgr -ArgumentList "/sagerun:1"'
+        command = self.command_clean_disk()
         self.run_powershell_in_thread(
             command, "Executando Limpeza de Disco", admin=True
         )
@@ -351,7 +387,7 @@ class ScriptsMixin:
                 Write-Output "Desfragmentação concluída."
             }
         """
-        self.run_powershell_in_thread(command, "Otimizando Disco")
+        self.run_powershell_in_thread(command, "Otimizando Disco", admin=True)
 
     def run_dism(self):
         command = (
@@ -359,11 +395,15 @@ class ScriptsMixin:
             "DISM /Online /Cleanup-Image /CheckHealth; "
             "DISM /Online /Cleanup-image /Restorehealth"
         )
-        self.run_powershell_in_thread(command, "Verificando Integridade(dism)")
+        self.run_powershell_in_thread(
+            command, "Verificando Integridade(dism)", admin=True
+        )
 
     def run_sfc(self):
         command = "sfc /scannow"
-        self.run_powershell_in_thread(command, "Verificar Sistema(sfc)")
+        self.run_powershell_in_thread(
+            command, "Verificar Sistema(sfc)", admin=True
+        )
 
     def diag_memory(self):
         command = "Start-Process mdsched"
@@ -403,7 +443,13 @@ class ScriptsMixin:
         self.run_powershell_in_thread(command, "Avaliando Desempenho do Disco")
 
     def run_chkdsk(self):
-        command = "chkdsk C: /f /r"
+        command = """
+            Write-Output "AGENDANDO CHKDSK NA PRÓXIMA REINICIALIZAÇÃO..."
+            echo S | chkdsk C: /f /r
+            Write-Output "CHKDSK foi agendado."
+            Write-Output "VOCÊ PRECISA REINICIAR O COMPUTADOR para que a
+             verificação ocorra."
+        """
         self.run_powershell_in_thread(
             command, "Verificação de Disco (CHKDSK)", admin=True
         )
@@ -499,3 +545,491 @@ class ScriptsMixin:
             "-MaxEvents 10 | Format-Table TimeCreated, Message -Wrap -AutoSize"
         )
         self.run_powershell_in_thread(command, "Logs de Eventos do Sistema")
+
+    def clean_full(self):
+        command = self.comand_temp_files()
+        command += self.command_browser_cache()
+        command += self.command_clean_logs()
+        command += self.command_clean_disk()
+        self.run_powershell_in_thread(command, "Limpeza Completa", admin=True)
+
+    def fix_full(self):
+        command = """
+            Write-Output "--- Iniciando Reparo DISM ---"
+            DISM /Online /Cleanup-Image /ScanHealth
+            DISM /Online /Cleanup-Image /CheckHealth
+            DISM /Online /Cleanup-image /Restorehealth
+
+            Write-Output "--- Iniciando Verificação SFC ---"
+            sfc /scannow
+
+            Write-Output "--- REPARO COMPLETO CONCLUÍDO ---"
+        """
+        self.run_powershell_in_thread(
+            command, "Rotina de Reparo de Sistema", admin=True
+        )
+
+    def fix_windows_update(self):
+        command = (
+            "Stop-Service -Name wuauserv -Force; "
+            "Stop-Service -Name bits -Force; "
+            "Stop-Service -Name cryptsvc -Force; "
+            "Stop-Service -Name msiserver -Force; "
+            r'Rename-Item -Path "C:\\Windows\\SoftwareDistribution" '
+            r'-NewName "SoftwareDistribution.old" '
+            "-ErrorAction SilentlyContinue; "
+            r'Rename-Item -Path "C:\\Windows\\System32\\catroot2" '
+            r'-NewName "catroot2.old" -ErrorAction SilentlyContinue; '
+            r"""
+                $dlls = @(
+                    "atl.dll","urlmon.dll","mshtml.dll","shdocvw.dll"
+                    ,"browseui.dll","jscript.dll","vbscript.dll","scrrun.dll",
+                    "msxml.dll","msxml3.dll","msxml6.dll","actxprxy.dll",
+                    "softpub.dll","wintrust.dll","dssenh.dll","rsaenh.dll",
+                    "gpkcsp.dll","sccbase.dll","slbcsp.dll","cryptdlg.dll",
+                    "oleaut32.dll","ole32.dll","shell32.dll","initpki.dll",
+                    "wuapi.dll","wuaueng.dll","wuaueng1.dll","wucltui.dll",
+                    "wups.dll","wups2.dll","wuweb.dll","qmgr.dll",
+                    "qmgrprxy.dll","wucltux.dll","muweb.dll","wuwebv.dll"
+                )
+                foreach ($dll in $dlls) {
+                    regsvr32.exe /s $dll
+                }
+            """
+            "Start-Service -Name wuauserv; "
+            "Start-Service -Name bits; "
+            "Start-Service -Name cryptsvc; "
+            "Start-Service -Name msiserver;"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Windows Update", admin=True
+        )
+
+    def fix_microsoft_store(self):
+        command = (
+            "wsreset.exe; "
+            "Get-AppxPackage -AllUsers *WindowsStore* | "
+            "Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "
+            "'$($_.InstallLocation)\\AppXManifest.xml'}"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Microsoft Store", admin=True
+        )
+
+    def re_register_store_apps(self):
+        command = (
+            "Get-AppxPackage -AllUsers | "
+            "ForEach-Object { Add-AppxPackage -DisableDevelopmentMode "
+            '-Register "$($_.InstallLocation)\\AppXManifest.xml" '
+            "-ErrorAction SilentlyContinue}"
+        )
+        self.run_powershell_in_thread(
+            command, "Re-registrando Apps da Store", admin=True
+        )
+
+    def fix_firewall(self):
+        command = (
+            "netsh advfirewall reset; "
+            "netsh advfirewall set allprofiles state on; "
+            "Set-Service mpssvc -StartupType Automatic; "
+            "Start-Service mpssvc"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Firewall do Windows", admin=True
+        )
+
+    def fix_network(self):
+        command = """
+            Write-Output "--- Iniciando Reparo de Rede ---"
+            Write-Output "Limpando Cache DNS..."
+            ipconfig /flushdns
+            Write-Output "Redefinindo TCP/IP..."
+            netsh int ip reset
+            Write-Output "Redefinindo Catálogo Winsock..."
+            netsh winsock reset
+            Write-Output "--- Reparo de Rede Concluído ---"
+        """
+        self.run_powershell_in_thread(
+            command, "Reparando Rede (DNS, IP, Winsock)", admin=True
+        )
+
+    def fix_icons(self):
+        command = (
+            "ie4uinit.exe -ClearIconCache; "
+            "Stop-Process -Name explorer -Force; "
+            "Start-Process explorer;"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Ícones do Sistema", admin=True
+        )
+
+    def fix_start_menu(self):
+        command = (
+            "Get-AppxPackage "
+            "-AllUsers Microsoft.Windows.StartMenuExperienceHost | "
+            "Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "
+            "'$($_.InstallLocation)\\AppXManifest.xml'}; "
+            "Stop-Process -Name StartMenuExperienceHost -Force;"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Menu Iniciar", admin=True
+        )
+
+    def fix_taskbar(self):
+        command = (
+            "Get-AppxPackage -AllUsers Microsoft.Windows.ShellExperienceHost |"
+            " Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "
+            "'$($_.InstallLocation)\\AppXManifest.xml'}; "
+            "Stop-Process -Name ShellExperienceHost -Force;"
+        )
+        self.run_powershell_in_thread(
+            command, "Reparando Barra de Tarefas", admin=True
+        )
+
+    def clear_print_queue(self):
+        command = (
+            "Stop-Service -Name Spooler -Force; "
+            "Remove-Item -Path 'C:\\Windows\\System32\\spool\\PRINTERS\\*' "
+            "-Recurse -Force -ErrorAction SilentlyContinue; "
+            "Start-Service -Name Spooler;"
+        )
+        self.run_powershell_in_thread(
+            command, "Limpando Fila de Impressão", admin=True
+        )
+
+    def enable_system_restore(self):
+        command = (
+            "Enable-ComputerRestore -Drive 'C:'; "
+            'Write-Output "Restauração do Sistema Ativada";'
+        )
+        self.run_powershell_in_thread(
+            command, "Ativando Restauração do Sistema", admin=True
+        )
+
+    def disable_system_restore(self):
+        command = (
+            "Disable-ComputerRestore -Drive 'C:'; "
+            'Write-Output "Restauração do Sistema Desativada";'
+        )
+        self.run_powershell_in_thread(
+            command, "Desativando Restauração do Sistema", admin=True
+        )
+
+    def point_restore(self):
+        command = (
+            'Checkpoint-Computer -Description "Ponto de Restauração Manual";'
+        )
+        self.run_powershell_in_thread(
+            command, "Criando Ponto de Restauração", admin=True
+        )
+
+    def restore_system(self):
+        command = "rstrui.exe"
+        self.run_powershell_in_thread(command, "Restaurar Sistema", admin=True)
+
+    def status_firewall(self):
+        command = "netsh advfirewall show allprofiles"
+        self.run_powershell_in_thread(command, "Status do Firewall")
+
+    def status_protection(self):
+        command = "Get-MpComputerStatus | Format-List"
+        self.run_powershell_in_thread(command, "Status do Windows Defender")
+
+    def update_definitions(self):
+        command = "Update-MpSignature"
+        self.run_powershell_in_thread(
+            command, "Atualizando Definições do Windows Defender", admin=True
+        )
+
+    def scan_threats(self):
+        command = "Start-MpScan -ScanType QuickScan"
+        self.run_powershell_in_thread(
+            command, "Verificando Ameaças(Defender)", admin=True
+        )
+
+    def status_bitlocker(self):
+        command = "Get-BitLockerVolume | Format-List"
+        self.run_powershell_in_thread(command, "Status do BitLocker")
+
+    def device_manager(self):
+        command = "Start-Process devmgmt.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Gerenciador de Dispositivos", admin=True
+        )
+
+    def disk_management(self):
+        command = "Start-Process diskmgmt.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Gerenciamento de Disco", admin=True
+        )
+
+    def printer_management(self):
+        command = (
+            'Start-Process "explorer.exe"'
+            ' "shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}";'
+        )
+        self.run_powershell_in_thread(
+            command, "Abrindo Gerenciamento de Impressoras", admin=True
+        )
+
+    def event_viewer(self):
+        command = "Start-Process eventvwr.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Visualizador de Eventos", admin=True
+        )
+
+    def task_scheduler(self):
+        command = "Start-Process taskschd.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Agendador de Tarefas", admin=True
+        )
+
+    def system_services(self):
+        command = "Start-Process services.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Gerenciador de Serviços", admin=True
+        )
+
+    def group_policy_editor(self):
+        command = "Start-Process gpedit.msc"
+        self.run_powershell_in_thread(
+            command, "Abrindo Editor de Política de Grupo", admin=True
+        )
+
+    def registry_editor(self):
+        command = "Start-Process regedit"
+        self.run_powershell_in_thread(
+            command, "Abrindo Editor do Registro", admin=True
+        )
+
+    def config_file_explorer(self):
+        command = (
+            "Write-Host 'Configurando o Explorador de Arquivos...';"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "HideFileExt" -Value 0 '
+            "-PropertyType DWORD -Force;"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "Start_TrackDocs" -Value 0 '
+            "-PropertyType DWORD -Force;"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "Start_TrackProgs" -Value 0 '
+            "-PropertyType DWORD -Force;"
+            '$path = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\CloudStorage\\Accounts";'
+            "if (Test-Path $path) { "
+            'New-ItemProperty -Path $path -Name "OfficeOnline" -Value 0 '
+            "-PropertyType DWORD -Force };"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "LaunchTo" -Value 1 '
+            "-PropertyType DWORD -Force;"
+            "Write-Host 'Configurações aplicadas. Reiniciando o Explorer...';"
+            "Stop-Process -Name explorer -Force"
+        )
+        self.run_powershell_in_thread(
+            command, "Configurando Explorador de Arquivos", admin=True
+        )
+
+    def show_hidden_files(self):
+        command = (
+            'Write-Host "Mostrando arquivos ocultos e do sistema...";'
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "Hidden" -Value 1 '
+            "-PropertyType DWORD -Force;"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "ShowSuperHidden" -Value 1 '
+            "-PropertyType DWORD -Force;"
+            "Write-Host 'Reiniciando Explorer para aplicar...';"
+            "Stop-Process -Name explorer -Force"
+        )
+        self.run_powershell_in_thread(
+            command, "Mostrando Arquivos Ocultos", admin=True
+        )
+
+    def hide_hidden_files(self):
+        command = (
+            'Write-Host "Ocultando arquivos ocultos e do sistema...";'
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "Hidden" -Value 0 '
+            "-PropertyType DWORD -Force;"
+            "New-ItemProperty -Path "
+            '"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\'
+            'Explorer\\Advanced" -Name "ShowSuperHidden" -Value 0 '
+            "-PropertyType DWORD -Force;"
+            'Write-Host "Reiniciando Explorer para aplicar...";'
+            "Stop-Process -Name explorer -Force"
+        )
+        self.run_powershell_in_thread(
+            command, "Ocultando Arquivos Ocultos", admin=True
+        )
+
+    def shortcut_office(self):
+        command = """
+            $desktop = "$env:PUBLIC\\Desktop"
+            $apps = @("Word", "Excel", "PowerPoint")
+            $officePaths = @(
+                "$env:ProgramFiles\\Microsoft Office\\root\\Office16",
+                "$env:ProgramFiles(x86)\\Microsoft Office\\root\\Office16"
+                "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs"
+            )
+            foreach ($app in $apps) {
+                $found = $false
+                foreach ($path in $officePaths) {
+                    $appPath = "$path\\$app.lnk"
+                    if (Test-Path $appPath) {
+                        Write-Host "Atalho encontrado: $appPath"
+                        Copy-Item -Path $appPath -Destination $desktop -Force
+                        $found = $true
+                        break
+                    }
+                }
+                if (-not $found) {
+                    Write-Host "AVISO: Atalho para '$app' não encontrado."
+                }
+            }
+            Write-Host "Criação de atalhos do Office concluída."
+        """
+        self.run_powershell_in_thread(
+            command, "Criando Atalhos do Office no Desktop", admin=True
+        )
+
+    def config_visual_options(self):
+        command = (
+            "function Set-RegistryValue {"
+            "    param ("
+            "        [string]$path,"
+            "        [string]$name,"
+            "        [object]$value"
+            "    )"
+            "    if (Test-Path $path) {"
+            "        Set-ItemProperty -Path $path -Name $name -Value $value"
+            "    } else {"
+            "        New-Item -Path $path -Force | Out-Null"
+            "        Set-ItemProperty -Path $path -Name $name -Value $value"
+            "    }"
+            "}"
+            '$performanceKey = "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\Explorer\\VisualEffects";'
+            'Set-RegistryValue -path $performanceKey -name "VisualFX" '
+            "-value 0;"
+            'Set-RegistryValue -path $performanceKey -name "DragWindow" '
+            "-value 1;"
+            'Set-RegistryValue -path $performanceKey -name "IconCache" '
+            "-value 1;"
+            "Set-RegistryValue -path $performanceKey -name "
+            '"ShadowUnderWindows" -value 1;'
+            'Set-RegistryValue -path $performanceKey -name "ShadowUnderMouse" '
+            "-value 1;"
+            'Set-RegistryValue -path $performanceKey -name "SmoothScroll" '
+            "-value 1;"
+            'Set-RegistryValue -path $performanceKey -name "RoundFont" '
+            "-value 1;"
+            'Set-RegistryValue -path $performanceKey -name "ShadowLabels" '
+            "-value 1;"
+        )
+        self.run_powershell_in_thread(
+            command, "Configurando Opções Visuais", admin=True
+        )
+
+    def disable_notifications(self):
+        command = (
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\PushNotifications" -Name "ToastEnabled" -Value 0 '
+            "-Force;"
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\Notifications\\Settings" -Name '
+            '"NOC_GLOBAL_SETTING_TOASTS_ENABLED" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\ContentDeliveryManager" '
+            '-Name "SystemPaneSuggestionsEnabled" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\Explorer\\Advanced" '
+            '-Name "ShowSyncProviderNotifications" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\ContentDeliveryManager" '
+            '-Name "SubscribedContent-310093Enabled" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\ContentDeliveryManager" '
+            '-Name "SubscribedContent-314563Enabled" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\ContentDeliveryManager" '
+            '-Name "SubscribedContent-338387Enabled" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\UserProfileEngagement" '
+            '-Name "ScoobeSystemSettingEnabled" -Value 0 -Force;'
+            'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\'
+            'CurrentVersion\\ContentDeliveryManager" '
+            '-Name "SoftLandingEnabled" -Value 0 -Force;'
+        )
+        self.run_powershell_in_thread(
+            command, "Desativando Notificações", admin=True
+        )
+
+    def list_programs(self):
+        command = (
+            "Get-ItemProperty HKLM:\\Software\\Wow6432Node\\Microsoft\\"
+            "Windows\\CurrentVersion\\Uninstall\\* | Select-Object "
+            "DisplayName,"
+            " DisplayVersion, Publisher, InstallDate | Format-Table -AutoSize;"
+            "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\"
+            "CurrentVersion\\Uninstall\\* | Select-Object DisplayName, "
+            "DisplayVersion, Publisher, InstallDate | Format-Table -AutoSize;"
+            "Get-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\"
+            "CurrentVersion\\Uninstall\\* | Select-Object DisplayName, "
+            "DisplayVersion, Publisher, InstallDate | Format-Table -AutoSize;"
+        )
+        self.run_powershell_in_thread(command, "Programas Instalados")
+
+    def remove_bloatware(self):
+        command = (
+            "Get-AppxPackage -AllUsers | Where-Object { $_.Name -notmatch "
+            '"(Microsoft.WindowsStore|Microsoft.MSPaint|Microsoft.Windows'
+            "Calculator|Microsoft.Windows.Photos|Microsoft.Windows.Alarm|"
+            "Microsoft.Windows.Notepad|Microsoft.ScreenSketch|"
+            'Microsoft.MicrosoftEdge)" } | '
+            "Remove-AppxPackage -ErrorAction SilentlyContinue; "
+            "Get-AppxPackage -AllUsers | Where-Object { $_.Name -notmatch "
+            '"(Microsoft.WindowsStore|Microsoft.MSPaint|Microsoft.Windows'
+            "Calculator|Microsoft.Windows.Photos|Microsoft.Windows.Alarm|"
+            "Microsoft.Windows.Notepad|Microsoft.ScreenSketch|"
+            'Microsoft.MicrosoftEdge)" } | '
+            "Remove-AppxProvisionedPackage -Online -ErrorAction "
+            "SilentlyContinue;"
+        )
+        self.run_powershell_in_thread(
+            command, "Removendo Bloatware", admin=True
+        )
+
+    def remove_programs(self):
+        command = "appwiz.cpl"
+        self.run_powershell_in_thread(
+            command, "Abrindo Adicionar ou Remover Programas", admin=True
+        )
+
+    def ativ_winrar(self):
+        command = """
+            $arquivo = "C:\\Program Files\\WinRAR\\rarreg.key"
+            Remove-Item -Path $arquivo -Force -ErrorAction SilentlyContinue
+            $caminho = "C:\\Program Files\\WinRAR\\rarreg.key"
+            $conteudo = @"
+RAR registration data
+Federal Agency for Education
+1000000 PC usage license
+UID=b621cca9a84bc5deffbf
+6412612250ffbf533df6db2dfe8ccc3aae5362c06d54762105357d
+5e3b1489e751c76bf6e0640001014be50a52303fed29664b074145
+7e567d04159ad8defc3fb6edf32831fd1966f72c21c0c53c02fbbb
+2f91cfca671d9c482b11b8ac3281cb21378e85606494da349941fa
+e9ee328f12dc73e90b6356b921fbfb8522d6562a6a4b97e8ef6c9f
+fb866be1e3826b5aa126a4d2bfe9336ad63003fc0e71c307fc2c60
+64416495d4c55a0cc82d402110498da970812063934815d81470829275
+"@
+            $conteudo | Set-Content -Path $caminho -Encoding ASCII
+        """
+        self.run_powershell_in_thread(command, "Ativando WinRAR", admin=True)
