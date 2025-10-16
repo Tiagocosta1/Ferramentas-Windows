@@ -6,6 +6,7 @@
     --border-color: #555555;
     --general-bg: #212121;
     --text-color: #ffffff;
+    --text-color-terminal: #ffffff;
     --terminal-bg: #1c1c1c;
 }
 
@@ -147,7 +148,7 @@ body {
     width: 100%;
     height: 98%;
     background-color: var(--terminal-bg);
-    color: var(--text-color);
+    color: var(--text-color-terminal);
     font-family: 'Cascadia Mono', monospace;
     overflow-y: scroll;
     border: 1px solid var(--border-color);
