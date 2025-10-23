@@ -56,7 +56,7 @@ body {
 #menu-logo-header {
     text-align: center;
     padding: 20px 20px 10px 20px;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     color: var(--text-highlight-color);
     border-bottom: 1px solid var(--border-color);
@@ -81,6 +81,7 @@ body {
     padding: 10px 20px;
     color: var(--text-color);
     font-size: 16px;
+    font-weight: bold;
     cursor: pointer;
     transition: background-color 0.15s;
     user-select: none;
@@ -111,7 +112,7 @@ body {
 }
 .submenu .menu-item {
     padding-left: 55px;
-    font-size: 15px;
+    font-size: 14px;
 }
 .dropdown-arrow {
     margin-left: auto;
