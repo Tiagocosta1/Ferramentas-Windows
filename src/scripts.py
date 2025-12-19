@@ -132,8 +132,26 @@ class ScriptsMixin:
     def install_foxit(self):
         self._install_winget_app("Foxit.FoxitReader", "Foxit Reader")
 
-    def install_hoptodesk(self):
-        self._install_winget_app("9N0NXG9ZMF7Z", "HopToDesk")
+    def install_rustdesk(self):
+        command = '''
+            $url = "https://visaoinformaticapb.com.br/downloads/rustdesk.exe"
+            $destino = Join-Path $env:TEMP "rustdesk.exe"
+            $argumentos = "/VERYSILENT"
+
+            Write-Host "Baixando o RustDesk..."
+            Invoke-WebRequest -Uri $url -OutFile $destino
+
+            Write-Host "Instalando... (Aguardando o término)"
+            Start-Process -FilePath $destino -ArgumentList $argumentos -Wait
+
+            Write-Host "Instalação concluída."
+
+            Remove-Item $destino -Force
+            Write-Host "Instalador removido."
+        '''
+        self.run_powershell_in_thread(
+            command, "Instalando RustDesk", admin=True
+        )
 
     def install_java(self):
         self._install_winget_app("Oracle.JavaRuntimeEnvironment", "Java")
@@ -147,7 +165,25 @@ class ScriptsMixin:
         self._install_winget_app("Microsoft.Office", "Microsoft Office")
 
     def install_teamviewer(self):
-        self._install_winget_app("TeamViewer.TeamViewer", "Team Viewer")
+        command = '''
+            $url = "https://visaoinformaticapb.com.br/downloads/teamviewer.exe"
+            $destino = Join-Path $env:TEMP "teamviewer.exe"
+            $argumentos = "/VERYSILENT"
+
+            Write-Host "Baixando o TeamViewer..."
+            Invoke-WebRequest -Uri $url -OutFile $destino
+
+            Write-Host "Instalando... (Aguardando o término)"
+            Start-Process -FilePath $destino -ArgumentList $argumentos -Wait
+
+            Write-Host "Instalação concluída."
+
+            Remove-Item $destino -Force
+            Write-Host "Instalador removido."
+        '''
+        self.run_powershell_in_thread(
+            command, "Instalando TeamViewer", admin=True
+        )
 
     def install_winrar(self):
         self._install_winget_app("RARLab.WinRAR", "WinRar")

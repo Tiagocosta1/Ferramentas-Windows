@@ -234,7 +234,7 @@ def MenuInstallPrograms(self):
         "K-Lite Codec": self.install_codec,
         "Microsoft Office": self.install_office,
         "AnyDesk": self.install_anydesk,
-        "HopToDesk": self.install_hoptodesk,
+        "RustDesk": self.install_rustdesk,
         "Team Viewer": self.install_teamviewer,
         "7zip": self.install_7zip,
         "WinRar": self.install_winrar,
